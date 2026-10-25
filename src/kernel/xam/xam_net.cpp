@@ -560,7 +560,8 @@ u32 NetDll_XNetQosRelease_entry(u32 caller, ppc_ptr_t<XNQOS> qos) {
 
 u32 NetDll_XNetQosListen_entry(u32 caller, mapped_void id, mapped_void data, u32 data_size, u32 r7,
                                u32 flags) {
-  return X_ERROR_FUNCTION_FAILED;
+  // Nothing answers QoS probes here; a session host still expects the listen to succeed.
+  return X_ERROR_SUCCESS;
 }
 
 u32 NetDll_inet_addr_entry(mapped_string addr_ptr) {
