@@ -12,6 +12,7 @@
 #include <cstring>
 
 #include <rex/kernel/xam/module.h>
+#include <rex/logging.h>
 #include <rex/platform.h>
 #include <rex/system/kernel_state.h>
 #include <rex/system/xsocket.h>
@@ -28,6 +29,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #endif
 
@@ -96,12 +98,29 @@ X_STATUS XSocket::SetOption(uint32_t level, uint32_t optname, void* optval_ptr, 
 }
 
 X_STATUS XSocket::IOControl(uint32_t cmd, uint8_t* arg_ptr) {
-  int ret = rex::net::socket_ioctl(native_handle_, cmd, arg_ptr);
+  // Guest commands use the Winsock codes and a big-endian u32 argument.
+  constexpr uint32_t X_FIONBIO = 0x8004667E;
+  constexpr uint32_t X_FIONREAD = 0x4004667F;
+  auto* guest_arg = reinterpret_cast<rex::be<uint32_t>*>(arg_ptr);
+  uint32_t native_arg = *guest_arg;
+  int ret;
+  switch (cmd) {
+    case X_FIONBIO:
+      ret = rex::net::socket_ioctl(native_handle_, FIONBIO, reinterpret_cast<uint8_t*>(&native_arg));
+      break;
+    case X_FIONREAD:
+      ret = rex::net::socket_ioctl(native_handle_, FIONREAD, reinterpret_cast<uint8_t*>(&native_arg));
+      if (ret >= 0) {
+        *guest_arg = native_arg;
+      }
+      break;
+    default:
+      REXKRNL_WARN("XSocket::IOControl: unsupported command {:08X}", cmd);
+      return X_STATUS_NOT_IMPLEMENTED;
+  }
   if (ret < 0) {
-    // TODO: Get last error
     return X_STATUS_UNSUCCESSFUL;
   }
-
   return X_STATUS_SUCCESS;
 }
 
