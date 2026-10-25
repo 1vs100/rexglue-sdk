@@ -12,6 +12,7 @@
 // Disable warnings about unused parameters for kernel functions
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
+#include <algorithm>
 #include <cstring>
 
 #if REX_PLATFORM_MAC
@@ -786,6 +787,15 @@ struct host_set {
     }
   }
 
+  // Highest native descriptor in the set plus one; 0 when empty.
+  int NativeLimit() const {
+    int limit = 0;
+    for (uint32_t i = 0; i < this->count; ++i) {
+      limit = std::max(limit, static_cast<int>(this->sockets[i]->native_handle()) + 1);
+    }
+    return limit;
+  }
+
   void UpdateFrom(fd_set* native_set) {
     uint32_t new_count = 0;
     for (uint32_t i = 0; i < this->count; ++i) {
@@ -828,7 +838,10 @@ i32 NetDll_select_entry(i32 caller, i32 nfds, ppc_ptr_t<x_fd_set> readfds,
                                              reinterpret_cast<int32_t*>(&timeout.tv_usec));
     timeout_in = &timeout;
   }
-  int ret = select(nfds, readfds ? &native_readfds : nullptr, writefds ? &native_writefds : nullptr,
+  // The guest's nfds counts guest handles; the host needs its own descriptors.
+  const int native_nfds = std::max(
+      {host_readfds.NativeLimit(), host_writefds.NativeLimit(), host_exceptfds.NativeLimit()});
+  int ret = select(native_nfds, readfds ? &native_readfds : nullptr, writefds ? &native_writefds : nullptr,
                    exceptfds ? &native_exceptfds : nullptr, timeout_in);
   if (readfds) {
     host_readfds.UpdateFrom(&native_readfds);
