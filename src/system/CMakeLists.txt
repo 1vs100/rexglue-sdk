@@ -114,6 +114,11 @@ if(WIN32)
     target_compile_definitions(rexruntime PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
 endif()
 
+# Apps link rexruntime, not rexcore, so the UWP settings are exported here.
+if(WINDOWS_STORE)
+    target_compile_definitions(rexruntime PUBLIC REX_PLATFORM_WINRT=1 WINAPI_FAMILY=WINAPI_FAMILY_APP)
+endif()
+
 if(REXGLUE_USE_D3D12)
     target_link_libraries(rexruntime PUBLIC dxc-headers)
     target_compile_definitions(rexruntime PUBLIC REX_HAS_D3D12=1)

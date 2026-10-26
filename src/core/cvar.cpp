@@ -17,6 +17,13 @@
 #include <string_view>
 #include <unordered_map>
 
+#include <rex/platform.h>
+#if REX_PLATFORM_WINRT
+#include <windows.h>
+// CLI11 references this from an inline helper that is never called. The store
+// SDK headers do not declare it.
+extern "C" __declspec(dllimport) LPWSTR* WINAPI CommandLineToArgvW(LPCWSTR, int*);
+#endif
 #include <CLI/CLI.hpp>
 
 #include <rex/cvar.h>

@@ -20,6 +20,7 @@
 #include <rex/ui/flags.h>
 #include <rex/kernel/crt/heap.h>
 #include <rex/filesystem.h>
+#include <rex/platform.h>
 #include <rex/logging/sink.h>
 #include <rex/logging.h>
 #include <rex/ui/overlay/achievement_toast.h>
@@ -28,6 +29,7 @@
 #include <rex/ui/overlay/debug_overlay.h>
 #include <rex/ui/overlay/settings_overlay.h>
 #include <rex/audio/audio_system.h>
+#include <rex/audio/nop/nop_audio_system.h>
 #include <rex/audio/sdl/sdl_audio_system.h>
 #include <rex/input/input_system.h>
 #include <rex/kernel/init.h>
@@ -48,6 +50,8 @@
 #include <filesystem>
 #include <string_view>
 
+REXCVAR_DEFINE_STRING(audio_backend, "sdl", "Audio",
+                      "Audio output backend (sdl, nop)");
 REXCVAR_DEFINE_STRING(gpu_plugin, "", "GPU",
                       "GPU emulation plugin to load at startup (e.g. 'xenos'); empty disables "
                       "GPU emulation")
@@ -166,7 +170,12 @@ bool ReXApp::SetupEnvironment() {
   auto log_config =
       rex::BuildLogConfig(log_level_str, rex::ParseCategoryLevelsFromConfig(config_path_));
   log_config.app_name = std::string(GetName());
+#if REX_PLATFORM_WINRT
+  // The package install folder is read-only.
+  log_config.log_dir = rex::filesystem::GetUserFolder() / "logs";
+#else
   log_config.log_dir = exe_dir / "logs";
+#endif
   OnConfigureLogging(log_config);
   rex::ApplyLogCvarOverrides(log_config);
   rex::InitLogging(log_config);
@@ -305,7 +314,15 @@ bool ReXApp::ConstructRuntime(const PathConfig& paths) {
 
 bool ReXApp::SetupPresentation() {
   config_.gpu_plugin = REXCVAR_GET(gpu_plugin);
-  config_.audio_factory = REX_AUDIO_BACKEND(rex::audio::sdl::SDLAudioSystem);
+  const auto& audio_backend = REXCVAR_GET(audio_backend);
+  if (audio_backend == "nop") {
+    config_.audio_factory = REX_AUDIO_BACKEND(rex::audio::nop::NopAudioSystem);
+  } else {
+    if (audio_backend != "sdl") {
+      REXLOG_WARN("Unknown audio_backend '{}', using sdl", audio_backend);
+    }
+    config_.audio_factory = REX_AUDIO_BACKEND(rex::audio::sdl::SDLAudioSystem);
+  }
   config_.input_factory = REX_INPUT_BACKEND(rex::input::CreateDefaultInputSystem);
   config_.kernel_init = rex::kernel::InitializeKernel;
 

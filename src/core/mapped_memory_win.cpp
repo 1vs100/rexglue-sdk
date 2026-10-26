@@ -89,9 +89,9 @@ class Win32MappedMemory : public MappedMemory {
     if (length) {
       size_ = aligned_length;
     } else {
-      DWORD length_high;
-      size_t map_length = GetFileSize(file_handle, &length_high);
-      map_length |= static_cast<uint64_t>(length_high) << 32;
+      LARGE_INTEGER file_size{};
+      GetFileSizeEx(file_handle, &file_size);
+      size_t map_length = static_cast<size_t>(file_size.QuadPart);
       size_ = map_length - aligned_offset;
     }
 
@@ -170,9 +170,9 @@ std::unique_ptr<MappedMemory> MappedMemory::Open(const std::filesystem::path& pa
   if (length) {
     mm->size_ = aligned_length;
   } else {
-    DWORD length_high;
-    size_t map_length = GetFileSize(mm->file_handle, &length_high);
-    map_length |= static_cast<uint64_t>(length_high) << 32;
+    LARGE_INTEGER file_size{};
+    GetFileSizeEx(mm->file_handle, &file_size);
+    size_t map_length = static_cast<size_t>(file_size.QuadPart);
     mm->size_ = map_length - aligned_offset;
   }
 

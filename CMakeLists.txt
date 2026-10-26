@@ -42,6 +42,12 @@ else()
     option(REXGLUE_USE_VULKAN "Enable Vulkan graphics backend" ON)
 endif()
 
+# Windows Store (UWP) builds present to a CoreWindow through D3D12 only.
+if(WINDOWS_STORE)
+    set(REXGLUE_USE_D3D12 ON CACHE BOOL "" FORCE)
+    set(REXGLUE_USE_VULKAN OFF CACHE BOOL "" FORCE)
+endif()
+
 if(NOT REXGLUE_USE_D3D12 AND NOT REXGLUE_USE_VULKAN)
     message(FATAL_ERROR "At least one graphics backend must be enabled (REXGLUE_USE_D3D12 or REXGLUE_USE_VULKAN)")
 endif()
@@ -265,7 +271,10 @@ add_subdirectory(src/graphics)
 add_subdirectory(src/system)
 add_subdirectory(src/kernel)
 add_subdirectory(src/codegen)
-add_subdirectory(src/rexglue)
+# The codegen tool runs on the build host, not in a store app.
+if(NOT WINDOWS_STORE)
+    add_subdirectory(src/rexglue)
+endif()
 
 # Add tests subdirectory if tests are enabled
 if(REXGLUE_BUILD_TESTS)

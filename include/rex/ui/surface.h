@@ -34,6 +34,7 @@ class Surface {
     kTypeIndex_XcbWindow,
     // Windows.
     kTypeIndex_Win32Hwnd,
+    kTypeIndex_WinRTCoreWindow,
     // macOS — CAMetalLayer presented via MoltenVK (VK_EXT_metal_surface).
     kTypeIndex_CAMetalLayer,
   };
@@ -43,6 +44,7 @@ class Surface {
     kTypeFlag_WaylandSurface = TypeFlags(1) << kTypeIndex_WaylandSurface,
     kTypeFlag_XcbWindow = TypeFlags(1) << kTypeIndex_XcbWindow,
     kTypeFlag_Win32Hwnd = TypeFlags(1) << kTypeIndex_Win32Hwnd,
+    kTypeFlag_WinRTCoreWindow = TypeFlags(1) << kTypeIndex_WinRTCoreWindow,
     kTypeFlag_CAMetalLayer = TypeFlags(1) << kTypeIndex_CAMetalLayer,
   };
 

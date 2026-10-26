@@ -196,7 +196,9 @@ bool D3D12Presenter::DispatchTemporalUpscaler(ID3D12GraphicsCommandList* command
 
 Surface::TypeFlags D3D12Presenter::GetSupportedSurfaceTypes() const {
   Surface::TypeFlags types = 0;
-#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP | WINAPI_PARTITION_GAMES)
+#if REX_PLATFORM_WINRT
+  types |= Surface::kTypeFlag_WinRTCoreWindow;
+#elif WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP | WINAPI_PARTITION_GAMES)
   types |= Surface::kTypeFlag_Win32Hwnd;
 #endif
   return types;
@@ -417,7 +419,7 @@ D3D12Presenter::ConnectOrReconnectPaintingToSurfaceFromUIThread(Surface& new_sur
     ID3D12CommandQueue* direct_queue = provider_.GetDirectQueue();
     Microsoft::WRL::ComPtr<IDXGISwapChain1> swap_chain_1;
     switch (surface_type) {
-#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP | WINAPI_PARTITION_GAMES)
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP | WINAPI_PARTITION_GAMES) && !REX_PLATFORM_WINRT
       case Surface::kTypeIndex_Win32Hwnd: {
         HWND surface_hwnd = static_cast<const Win32HwndSurface&>(new_surface).hwnd();
         if (FAILED(dxgi_factory->CreateSwapChainForHwnd(
@@ -429,6 +431,17 @@ D3D12Presenter::ConnectOrReconnectPaintingToSurfaceFromUIThread(Surface& new_sur
         // support ALLOW_TEARING, and the window implementation provides
         // borderless fullscreen anyway with better state tracking.
         dxgi_factory->MakeWindowAssociation(surface_hwnd, DXGI_MWA_NO_ALT_ENTER);
+      } break;
+#endif
+#if REX_PLATFORM_WINRT
+      case Surface::kTypeIndex_WinRTCoreWindow: {
+        ::IUnknown* core_window =
+            static_cast<const WinRTCoreWindowSurface&>(new_surface).core_window();
+        if (FAILED(dxgi_factory->CreateSwapChainForCoreWindow(
+                direct_queue, core_window, &swap_chain_desc, nullptr, &swap_chain_1))) {
+          REXLOG_ERROR("D3D12Presenter: Failed to create a swap chain for the CoreWindow");
+          return SurfacePaintConnectResult::kFailure;
+        }
       } break;
 #endif
       default:

@@ -135,3 +135,10 @@ if(REXGLUE_ENABLE_PERF_COUNTERS)
     target_compile_definitions(rexcore PUBLIC
         $<$<NOT:$<CONFIG:Release>>:REXGLUE_ENABLE_PERF_COUNTERS>)
 endif()
+
+if(WINDOWS_STORE)
+    # Visual Studio sets this for store projects. It hides desktop-only APIs and
+    # makes SDL3-uwp's headers select their WinRT code.
+    target_compile_definitions(rexcore PUBLIC REX_PLATFORM_WINRT=1 WINAPI_FAMILY=WINAPI_FAMILY_APP)
+    target_link_libraries(rexcore PUBLIC WindowsApp)
+endif()

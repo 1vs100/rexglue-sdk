@@ -11,6 +11,7 @@
 #endif
 #include <windows.h>
 
+#include <rex/logging.h>
 #include <rex/string.h>
 #include <rex/system.h>
 
@@ -30,8 +31,21 @@ void ShowSimpleMessageBox(SimpleMessageBoxType type, std::string_view message) {
       flags |= MB_ICONERROR;
       break;
   }
+#if REX_PLATFORM_WINRT
+  // UWP has no MessageBox.
+  (void)flags;
+  (void)title;
+  if (type == SimpleMessageBoxType::Error) {
+    REXLOG_ERROR("{}", message);
+  } else if (type == SimpleMessageBoxType::Warning) {
+    REXLOG_WARN("{}", message);
+  } else {
+    REXLOG_INFO("{}", message);
+  }
+#else
   auto wide = rex::string::to_utf16(message);
   ::MessageBoxW(nullptr, reinterpret_cast<const wchar_t*>(wide.c_str()), title, flags);
+#endif
 }
 
 }  // namespace rex

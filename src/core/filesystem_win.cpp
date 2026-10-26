@@ -18,6 +18,10 @@
 
 #include "platform_win.h"
 
+#if REX_PLATFORM_WINRT
+#include <winrt/Windows.Storage.h>
+#endif
+
 #include <rex/filesystem.h>
 #include <rex/logging.h>
 #include <rex/string.h>
@@ -63,6 +67,11 @@ std::filesystem::path GetExecutableFolder() {
 }
 
 std::filesystem::path GetUserFolder() {
+#if REX_PLATFORM_WINRT
+  // Documents is not accessible to packaged apps.
+  return std::filesystem::path(
+      winrt::Windows::Storage::ApplicationData::Current().LocalFolder().Path().c_str());
+#else
   std::filesystem::path result;
   PWSTR path;
   if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, KF_FLAG_DEFAULT, nullptr, &path))) {
@@ -70,6 +79,7 @@ std::filesystem::path GetUserFolder() {
     CoTaskMemFree(path);
   }
   return result;
+#endif
 }
 
 bool CreateEmptyFile(const std::filesystem::path& path) {

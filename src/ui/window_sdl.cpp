@@ -425,7 +425,16 @@ std::unique_ptr<Surface> WindowSDL::CreateSurfaceImpl(Surface::TypeFlags allowed
   if (!sdl_window_) {
     return nullptr;
   }
-#if REX_PLATFORM_WIN32
+#if REX_PLATFORM_WINRT
+  SDL_PropertiesID props = SDL_GetWindowProperties(sdl_window_);
+  if (allowed_types & Surface::kTypeFlag_WinRTCoreWindow) {
+    auto* core_window = static_cast<::IUnknown*>(
+        SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WINRT_WINDOW_POINTER, nullptr));
+    if (core_window) {
+      return std::make_unique<WinRTCoreWindowSurface>(core_window);
+    }
+  }
+#elif REX_PLATFORM_WIN32
   SDL_PropertiesID props = SDL_GetWindowProperties(sdl_window_);
   if (allowed_types & Surface::kTypeFlag_Win32Hwnd) {
     HWND hwnd = static_cast<HWND>(
