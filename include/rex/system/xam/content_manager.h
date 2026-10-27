@@ -12,6 +12,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -129,6 +130,8 @@ class ContentPackage {
   const std::filesystem::path& package_path() const { return package_path_; }
 
   uint32_t GetPackageLicense() const { return license_; }
+  void SetPackageLicense(uint32_t license) { license_ = license; }
+  bool is_mounted() const { return mounted_; }
 
  private:
   KernelState* kernel_state_;
@@ -137,6 +140,7 @@ class ContentPackage {
   std::filesystem::path package_path_;
   XCONTENT_AGGREGATE_DATA content_data_;
   uint32_t license_ = 0;
+  bool mounted_ = false;
 };
 
 class ContentManager {
@@ -182,7 +186,20 @@ class ContentManager {
   // and writes a .header file for XAM enumeration.
   X_RESULT InstallContent(const std::filesystem::path& package_path);
 
+  // Makes an STFS marketplace package visible to the running title without
+  // extracting it. The package is listed from its header and mounted read-only
+  // when opened.
+  X_RESULT RegisterPackage(const std::filesystem::path& package_path);
+
  private:
+  struct RegisteredPackage {
+    XCONTENT_AGGREGATE_DATA data;
+    std::filesystem::path path;
+    uint32_t license_mask;
+  };
+
+  std::optional<RegisteredPackage> FindRegisteredPackage(const XCONTENT_AGGREGATE_DATA& data) const;
+
   std::filesystem::path ResolvePackageRoot(uint64_t xuid, XContentType content_type,
                                            uint32_t title_id = -1);
   std::filesystem::path ResolvePackagePath(uint64_t xuid, const XCONTENT_AGGREGATE_DATA& data);
@@ -203,6 +220,7 @@ class ContentManager {
   rex::thread::global_critical_region global_critical_region_;
   std::unordered_map<string::string_key_case, ContentPackage*, string::string_key_case::Hash>
       open_packages_;
+  std::vector<RegisteredPackage> registered_packages_;
 };
 
 }  // namespace xam
