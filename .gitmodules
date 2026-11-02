@@ -66,3 +66,7 @@
 [submodule "thirdparty/tracy"]
 	path = thirdparty/tracy
 	url = https://github.com/wolfpld/tracy.git
+[submodule "thirdparty/sdl3-uwp"]
+	path = thirdparty/sdl3-uwp
+	url = https://github.com/XboxEmulationHub/SDL3-uwp
+	branch = uwp-3.4.18

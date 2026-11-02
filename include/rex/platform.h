@@ -59,6 +59,11 @@
 #ifndef REX_PLATFORM_LINUX
 #define REX_PLATFORM_LINUX 0
 #endif
+// Set by the build for Windows Store (UWP) targets, together with
+// REX_PLATFORM_WIN32.
+#ifndef REX_PLATFORM_WINRT
+#define REX_PLATFORM_WINRT 0
+#endif
 
 #if defined(__clang__)
 #define REX_COMPILER_CLANG 1

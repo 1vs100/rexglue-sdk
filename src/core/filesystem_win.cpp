@@ -18,6 +18,10 @@
 
 #include "platform_win.h"
 
+#if REX_PLATFORM_WINRT
+#include <winrt/Windows.Storage.h>
+#endif
+
 #include <rex/filesystem.h>
 #include <rex/logging.h>
 #include <rex/string.h>
@@ -43,9 +47,19 @@ std::filesystem::path to_path(const std::u16string_view source) {
 namespace filesystem {
 
 std::filesystem::path GetExecutablePath() {
-  wchar_t* path;
-  auto error = _get_wpgmptr(&path);
-  return !error ? std::filesystem::path(path) : std::filesystem::path();
+  // _get_wpgmptr is only set for a wide entry point.
+  std::wstring path(MAX_PATH, L'\0');
+  for (;;) {
+    DWORD length = GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()));
+    if (length == 0) {
+      return {};
+    }
+    if (length < path.size()) {
+      path.resize(length);
+      return std::filesystem::path(path);
+    }
+    path.resize(path.size() * 2);
+  }
 }
 
 std::filesystem::path GetExecutableFolder() {
@@ -53,6 +67,11 @@ std::filesystem::path GetExecutableFolder() {
 }
 
 std::filesystem::path GetUserFolder() {
+#if REX_PLATFORM_WINRT
+  // Documents is not accessible to packaged apps.
+  return std::filesystem::path(
+      winrt::Windows::Storage::ApplicationData::Current().LocalFolder().Path().c_str());
+#else
   std::filesystem::path result;
   PWSTR path;
   if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, KF_FLAG_DEFAULT, nullptr, &path))) {
@@ -60,6 +79,7 @@ std::filesystem::path GetUserFolder() {
     CoTaskMemFree(path);
   }
   return result;
+#endif
 }
 
 bool CreateEmptyFile(const std::filesystem::path& path) {

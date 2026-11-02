@@ -28,6 +28,8 @@
 #include <rex/cvar.h>
 #include <rex/logging.h>
 #include <rex/platform.h>
+
+#include <cstdio>
 #include <rex/platform/env.h>
 
 #if REX_PLATFORM_WIN32
@@ -268,10 +270,17 @@ void InitLogging(const LogConfig& config) {
     resolved_path = NextSequentialLogPath(log_dir, config.app_name);
   }
   if (!resolved_path.empty()) {
-    auto sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(resolved_path.string(), false);
-    sink->set_level(spdlog::level::trace);
-    sink->set_pattern(config.file_pattern);
-    g_file_sink = sink;
+    // An unwritable log location must not end the process.
+    try {
+      auto sink =
+          std::make_shared<spdlog::sinks::basic_file_sink_mt>(resolved_path.string(), false);
+      sink->set_level(spdlog::level::trace);
+      sink->set_pattern(config.file_pattern);
+      g_file_sink = sink;
+    } catch (const spdlog::spdlog_ex& e) {
+      std::fprintf(stderr, "Log file %s unavailable: %s\n", resolved_path.string().c_str(),
+                   e.what());
+    }
   }
 
   g_extra_sinks = config.extra_sinks;

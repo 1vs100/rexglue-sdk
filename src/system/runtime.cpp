@@ -13,6 +13,7 @@
 #include <rex/cvar.h>
 #include <rex/filesystem/devices/host_path_device.h>
 #include <rex/filesystem/devices/null_device.h>
+#include <rex/filesystem/devices/stfs_container_device.h>
 #include <rex/filesystem/vfs.h>
 #include <rex/logging.h>
 #include <rex/perf/counter.h>
@@ -49,10 +50,16 @@ Runtime::Runtime(const std::filesystem::path& game_data_root,
                  const std::filesystem::path& cache_root,
                  const std::filesystem::path& metadata_root)
     : game_data_root_(game_data_root),
-      user_data_root_(user_data_root.empty() ? game_data_root : user_data_root),
+      user_data_root_(user_data_root),
       update_data_root_(update_data_root),
       cache_root_(cache_root),
-      metadata_root_(metadata_root) {}
+      metadata_root_(metadata_root) {
+  if (user_data_root_.empty()) {
+    // A package game root is a read-only file; keep user data beside it.
+    user_data_root_ = std::filesystem::is_regular_file(game_data_root) ? game_data_root.parent_path()
+                                                                       : game_data_root;
+  }
+}
 
 Runtime::~Runtime() {
   Shutdown();
@@ -303,16 +310,22 @@ bool Runtime::SetupVfs() {
     return false;
   }
 
-  // Mount game_data_root as \Device\Harddisk0\Partition1
+  // Mount game_data_root as \Device\Harddisk0\Partition1. A file is the
+  // title's own STFS package, which is read-only like on the console.
   auto mount_path = "\\Device\\Harddisk0\\Partition1";
-  auto device = std::make_unique<rex::filesystem::HostPathDevice>(
-      mount_path, abs_game_root, !REXCVAR_GET(allow_game_relative_writes));
+  std::unique_ptr<rex::filesystem::Device> device;
+  if (std::filesystem::is_regular_file(abs_game_root)) {
+    device = std::make_unique<rex::filesystem::StfsContainerDevice>(mount_path, abs_game_root);
+  } else {
+    device = std::make_unique<rex::filesystem::HostPathDevice>(
+        mount_path, abs_game_root, !REXCVAR_GET(allow_game_relative_writes));
+  }
   if (!device->Initialize()) {
-    REXSYS_ERROR("Runtime::SetupVfs: Failed to initialize host path device");
+    REXSYS_ERROR("Runtime::SetupVfs: Failed to initialize the game data device");
     return false;
   }
   if (!file_system_->RegisterDevice(std::move(device))) {
-    REXSYS_ERROR("Runtime::SetupVfs: Failed to register host path device");
+    REXSYS_ERROR("Runtime::SetupVfs: Failed to register the game data device");
     return false;
   }
   REXSYS_DEBUG("  Mounted {} at {}", abs_game_root.string(), mount_path);

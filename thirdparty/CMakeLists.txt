@@ -41,8 +41,19 @@ set(REQUIRED_SUBMODULES
     fmt
     utfcpp
     imgui
-    sdl3
 )
+
+# SDL3-uwp contains C++/CX, which only MSVC compiles. When the SDK is built with
+# another compiler, build and install SDL3-uwp with MSVC separately and pass its
+# install prefix here.
+set(REXGLUE_SDL3_UWP_PREFIX "" CACHE PATH "Install prefix of a shared SDL3-uwp built with MSVC")
+
+# Windows Store builds use an SDL3 fork with the WinRT video driver.
+if(WINDOWS_STORE AND NOT REXGLUE_SDL3_UWP_PREFIX)
+    list(APPEND REQUIRED_SUBMODULES sdl3-uwp)
+elseif(NOT WINDOWS_STORE)
+    list(APPEND REQUIRED_SUBMODULES sdl3)
+endif()
 
 if(REXGLUE_USE_VULKAN)
     list(APPEND REQUIRED_SUBMODULES
@@ -236,6 +247,10 @@ add_library(imgui OBJECT
     ${IMGUI_DIR}/imgui_widgets.cpp
 )
 add_library(imgui::imgui ALIAS imgui)
+# UWP has no clipboard, ShellExecute or IMM32 API.
+if(WINDOWS_STORE)
+    target_compile_definitions(imgui PUBLIC IMGUI_DISABLE_WIN32_FUNCTIONS)
+endif()
 target_include_directories(imgui PUBLIC
     $<BUILD_INTERFACE:${IMGUI_DIR}>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
@@ -301,7 +316,27 @@ if(UNIX AND NOT APPLE)
     set(SDL_PIPEWIRE_SHARED   ON  CACHE BOOL "" FORCE)
 endif()
 
-add_subdirectory(sdl3)
+if(WINDOWS_STORE AND REXGLUE_SDL3_UWP_PREFIX)
+    # A changed prefix must not keep resolving to the previously cached package.
+    if(SDL3_DIR)
+        cmake_path(IS_PREFIX REXGLUE_SDL3_UWP_PREFIX "${SDL3_DIR}" NORMALIZE sdl3_dir_in_prefix)
+        if(NOT sdl3_dir_in_prefix)
+            unset(SDL3_DIR CACHE)
+        endif()
+    endif()
+    find_package(SDL3 REQUIRED CONFIG GLOBAL PATHS "${REXGLUE_SDL3_UWP_PREFIX}" NO_DEFAULT_PATH)
+    # SDL3-uwp keeps its CoreApplication state in C++/CX code, so the executable
+    # and rexruntime must share one SDL3.dll built by MSVC.
+    if(NOT TARGET SDL3::SDL3-shared)
+        message(FATAL_ERROR "REXGLUE_SDL3_UWP_PREFIX must hold a shared SDL3 build (SDL_SHARED=ON)")
+    endif()
+    # Install SDL3 next to the SDK so find_dependency(SDL3) resolves for consumers.
+    install(DIRECTORY "${REXGLUE_SDL3_UWP_PREFIX}/" DESTINATION .)
+elseif(WINDOWS_STORE)
+    add_subdirectory(sdl3-uwp sdl3)
+else()
+    add_subdirectory(sdl3)
+endif()
 
 #=============================================================================
 # DXC API headers (vendored from DirectXShaderCompiler, runtime-loaded)

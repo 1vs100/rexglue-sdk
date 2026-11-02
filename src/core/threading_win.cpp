@@ -210,7 +210,15 @@ class Win32Event : public Win32Handle<Event> {
   ~Win32Event() override = default;
   void Set() override { SetEvent(handle_); }
   void Reset() override { ResetEvent(handle_); }
+#if REX_PLATFORM_WINRT
+  // PulseEvent is not available to UWP apps.
+  void Pulse() override {
+    SetEvent(handle_);
+    ResetEvent(handle_);
+  }
+#else
   void Pulse() override { PulseEvent(handle_); }
+#endif
 };
 
 std::unique_ptr<Event> Event::CreateManualResetEvent(bool initial_state) {

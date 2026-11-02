@@ -169,6 +169,10 @@ if(WIN32)
     target_link_libraries(rexui PUBLIC dxgi dxguid)
 endif()
 
+if(WINDOWS_STORE)
+    target_link_libraries(rexui PUBLIC d3d12)
+endif()
+
 # D3D12 backend dependencies
 if(REXGLUE_USE_D3D12)
     target_link_libraries(rexui PUBLIC dxc-headers)

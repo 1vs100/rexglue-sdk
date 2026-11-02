@@ -54,6 +54,11 @@ bool SDLWindowedAppContext::Initialize() {
     REXLOG_ERROR("SDL_InitSubSystem(SDL_INIT_VIDEO) failed: {}", SDL_GetError());
     return false;
   }
+#if REX_PLATFORM_WINRT
+  // The CoreWindow is only activated from the dispatcher. Activation must
+  // happen before the long app setup, or the system ends the app.
+  SDL_PumpEvents();
+#endif
   const char* video_driver_in_use = SDL_GetCurrentVideoDriver();
   REXLOG_INFO("SDL video driver: {}", video_driver_in_use ? video_driver_in_use : "unknown");
   uint32_t first = SDL_RegisterEvents(2);

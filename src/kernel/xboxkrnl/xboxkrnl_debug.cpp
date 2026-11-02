@@ -26,6 +26,7 @@ namespace rex::kernel::xboxkrnl {
 using namespace rex::system;
 
 void DbgBreakPoint_entry() {
+  REXKRNL_WARN("DbgBreakPoint called by guest");
   rex::debug::Break();
 }
 
@@ -123,6 +124,8 @@ void HandleCppException(ppc_ptr_t<X_EXCEPTION_RECORD> record) {
   auto catchable_types = REX_KERNEL_MEMORY()->TranslateVirtual<x_s__CatchableTypeArray*>(
       throw_info->catchable_type_array_ptr);
 
+  REXKRNL_WARN("Guest C++ exception thrown: object {:08X} vftable {:08X}", uint32_t(thrown_ptr),
+               uint32_t(vftable_ptr));
   rex::debug::Break();
 }
 
@@ -140,11 +143,12 @@ void RtlRaiseException_entry(ppc_ptr_t<X_EXCEPTION_RECORD> record) {
 
   // TODO(benvanik): unwinding.
   // This is going to suck.
+  REXKRNL_WARN("RtlRaiseException: unhandled code {:08X}", uint32_t(record->code));
   rex::debug::Break();
 }
 
 void KeBugCheckEx_entry(u32 code, u32 param1, u32 param2, u32 param3, u32 param4) {
-  REXKRNL_DEBUG("*** STOP: 0x{:08X} (0x{:08X}, 0x{:08X}, 0x{:08X}, 0x{:08X})", code, param1, param2,
+  REXKRNL_ERROR("*** STOP: 0x{:08X} (0x{:08X}, 0x{:08X}, 0x{:08X}, 0x{:08X})", code, param1, param2,
                 param3, param4);
   fflush(stdout);
   rex::debug::Break();

@@ -19,9 +19,12 @@
 #include <rex/graphics/d3d12/shared_memory.h>
 #include <rex/logging.h>
 #include <rex/math.h>
+#include <rex/platform.h>
 #include <rex/ui/d3d12/d3d12_util.h>
 
-REXCVAR_DEFINE_BOOL(d3d12_tiled_shared_memory, true, "GPU/D3D12",
+// UpdateTileMappings on the shared memory buffer raises a breakpoint in the
+// Xbox D3D12 driver, which ends the process, so UWP uses a committed buffer.
+REXCVAR_DEFINE_BOOL(d3d12_tiled_shared_memory, !REX_PLATFORM_WINRT, "GPU/D3D12",
                     "Use tiled shared memory on D3D12")
     .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
 

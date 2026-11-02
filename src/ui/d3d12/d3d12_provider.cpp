@@ -20,6 +20,10 @@
 
 #include <malloc.h>
 
+#if REX_PLATFORM_WINRT
+#include <dxgi1_3.h>
+#endif
+
 REXCVAR_DEFINE_BOOL(d3d12_debug, false, "UI/D3D12", "Enable Direct3D 12 and DXGI debug layer")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
@@ -40,12 +44,16 @@ REXCVAR_DEFINE_INT32(d3d12_queue_priority, 1, "UI/D3D12",
 namespace rex::ui::d3d12 {
 
 bool D3D12Provider::IsD3D12APIAvailable() {
+#if REX_PLATFORM_WINRT
+  return true;
+#else
   HMODULE library_d3d12 = LoadLibraryW(L"D3D12.dll");
   if (!library_d3d12) {
     return false;
   }
   FreeLibrary(library_d3d12);
   return true;
+#endif
 }
 
 std::unique_ptr<D3D12Provider> D3D12Provider::Create() {
@@ -103,6 +111,10 @@ D3D12Provider::~D3D12Provider() {
 }
 
 bool D3D12Provider::EnableIncreaseBasePriorityPrivilege() {
+#if REX_PLATFORM_WINRT
+  // Packaged apps cannot adjust token privileges.
+  return false;
+#else
   TOKEN_PRIVILEGES privileges;
   privileges.PrivilegeCount = 1;
   privileges.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
@@ -118,9 +130,22 @@ bool D3D12Provider::EnableIncreaseBasePriorityPrivilege() {
       GetLastError() != ERROR_NOT_ALL_ASSIGNED;
   CloseHandle(token);
   return enabled;
+#endif
 }
 
 bool D3D12Provider::Initialize() {
+#if REX_PLATFORM_WINRT
+  // Packaged apps can only LoadLibrary their own DLLs, so the system libraries
+  // are linked directly. The optional debugging DLLs are unavailable.
+  pfn_create_dxgi_factory2_ = CreateDXGIFactory2;
+  pfn_dxgi_get_debug_interface1_ = DXGIGetDebugInterface1;
+  pfn_d3d12_get_debug_interface_ = D3D12GetDebugInterface;
+  pfn_d3d12_create_device_ = D3D12CreateDevice;
+  pfn_d3d12_serialize_root_signature_ = D3D12SerializeRootSignature;
+  pfn_d3d_disassemble_ = nullptr;
+  pfn_dxilconv_dxc_create_instance_ = nullptr;
+  pfn_dxcompiler_dxc_create_instance_ = nullptr;
+#else
   // Load the core libraries.
   library_dxgi_ = LoadLibraryW(L"dxgi.dll");
   library_d3d12_ = LoadLibraryW(L"D3D12.dll");
@@ -197,6 +222,7 @@ bool D3D12Provider::Initialize() {
         "https://github.com/microsoft/DirectXShaderCompiler/releases and place "
         "the DLL in the Xenia directory");
   }
+#endif
 
   // Configure the DXGI debug info queue.
   if (REXCVAR_GET(d3d12_break_on_error) || REXCVAR_GET(d3d12_break_on_warning)) {
@@ -351,6 +377,32 @@ bool D3D12Provider::Initialize() {
     if (REXCVAR_GET(d3d12_break_on_warning)) {
       d3d12_info_queue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, TRUE);
     }
+#if REX_PLATFORM_WINRT
+    // The Xbox runtime validates without the debug layer and breaks on errors
+    // by default, which ends the process when no debugger is attached. Log the
+    // messages instead.
+    if (!REXCVAR_GET(d3d12_break_on_error)) {
+      d3d12_info_queue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, FALSE);
+      d3d12_info_queue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, FALSE);
+    }
+    if (!REXCVAR_GET(d3d12_break_on_warning)) {
+      d3d12_info_queue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, FALSE);
+    }
+    ID3D12InfoQueue1* d3d12_info_queue_1;
+    if (SUCCEEDED(d3d12_info_queue->QueryInterface(IID_PPV_ARGS(&d3d12_info_queue_1)))) {
+      DWORD cookie = 0;
+      d3d12_info_queue_1->RegisterMessageCallback(
+          [](D3D12_MESSAGE_CATEGORY, D3D12_MESSAGE_SEVERITY severity, D3D12_MESSAGE_ID id,
+             LPCSTR description, void*) {
+            if (severity <= D3D12_MESSAGE_SEVERITY_WARNING) {
+              REXLOG_WARN("D3D12 message {} (severity {}): {}", int(id), int(severity),
+                          description ? description : "");
+            }
+          },
+          D3D12_MESSAGE_CALLBACK_FLAG_NONE, nullptr, &cookie);
+      d3d12_info_queue_1->Release();
+    }
+#endif
     d3d12_info_queue->Release();
   }
 

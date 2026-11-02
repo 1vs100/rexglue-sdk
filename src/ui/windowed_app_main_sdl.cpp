@@ -22,7 +22,11 @@
 #include <rex/ui/windowed_app.h>
 #include <rex/ui/windowed_app_context_sdl.h>
 
-#if REX_PLATFORM_WIN32
+#if REX_PLATFORM_WINRT
+// The entry point calls SDL_RunApp, which the WinRT SDL build implements with
+// CoreApplication::Run. Command line arguments are not available.
+#include <SDL3/SDL_main.h>
+#elif REX_PLATFORM_WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -48,7 +52,7 @@ int RunWindowedApp(int argc, char** argv) {
       return EXIT_FAILURE;
     }
 
-#if REX_PLATFORM_WIN32
+#if REX_PLATFORM_WIN32 && !REX_PLATFORM_WINRT
     // Apartment-threaded COM for shell dialogs.
     if (FAILED(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED))) {
       return EXIT_FAILURE;
@@ -71,14 +75,14 @@ int RunWindowedApp(int argc, char** argv) {
     app->InvokeOnDestroy();
   }
 
-#if REX_PLATFORM_WIN32
+#if REX_PLATFORM_WIN32 && !REX_PLATFORM_WINRT
   CoUninitialize();
 #endif
 
   return result;
 }
 
-#if REX_PLATFORM_WIN32
+#if REX_PLATFORM_WIN32 && !REX_PLATFORM_WINRT
 // Convert wide argv from CommandLineToArgvW to UTF-8 for cvar::Init.
 std::vector<std::string> WideArgsToUtf8(int argc, wchar_t** wargv) {
   std::vector<std::string> args;
@@ -102,7 +106,7 @@ std::vector<std::string> WideArgsToUtf8(int argc, wchar_t** wargv) {
 
 }  // namespace
 
-#if REX_PLATFORM_WIN32
+#if REX_PLATFORM_WIN32 && !REX_PLATFORM_WINRT
 
 int WINAPI wWinMain(HINSTANCE hinstance, HINSTANCE hinstance_prev, LPWSTR command_line,
                     int show_cmd) {

@@ -19,6 +19,7 @@
 #include <rex/filesystem.h>
 #include <rex/filesystem/devices/host_path_device.h>
 #include <rex/filesystem/devices/stfs_container_device.h>
+#include <rex/logging.h>
 #include <rex/string.h>
 #include <rex/system/kernel_state.h>
 #include <rex/system/xam/content_device.h>
@@ -46,14 +47,26 @@ ContentPackage::ContentPackage(KernelState* kernel_state, const std::string_view
   content_data_ = data;
 
   auto fs = kernel_state_->file_system();
-  auto device = std::make_unique<rex::filesystem::HostPathDevice>(device_path_, package_path, false,
-                                                                  /*allow_share_delete=*/true);
-  device->Initialize();
+  std::unique_ptr<rex::filesystem::Device> device;
+  if (std::filesystem::is_regular_file(package_path)) {
+    device = std::make_unique<rex::filesystem::StfsContainerDevice>(device_path_, package_path);
+  } else {
+    device = std::make_unique<rex::filesystem::HostPathDevice>(device_path_, package_path, false,
+                                                               /*allow_share_delete=*/true);
+  }
+  if (!device->Initialize()) {
+    REXSYS_ERROR("ContentPackage: failed to mount {}", rex::path_to_utf8(package_path));
+    return;
+  }
   fs->RegisterDevice(std::move(device));
   fs->RegisterSymbolicLink(root_name_ + ":", device_path_);
+  mounted_ = true;
 }
 
 ContentPackage::~ContentPackage() {
+  if (!mounted_) {
+    return;
+  }
   auto fs = kernel_state_->file_system();
   fs->UnregisterSymbolicLink(root_name_ + ":");
   fs->UnregisterDevice(device_path_);
@@ -108,6 +121,10 @@ std::filesystem::path ContentManager::ResolvePackagePath(uint64_t xuid,
     used_xuid = 0;
   }
 
+  if (const auto registered = FindRegisteredPackage(data)) {
+    return registered->path;
+  }
+
   // Content path:
   // content_root/xuid/title_id/content_type/data_file_name/
   auto package_root = ResolvePackageRoot(used_xuid, data.content_type, data.title_id);
@@ -147,12 +164,31 @@ std::vector<XCONTENT_AGGREGATE_DATA> ContentManager::ListContent(uint32_t device
 
   // Search path:
   // content_root/xuid/title_id/type_name/*
+  if (xuid == 0 && content_type == XContentType::kMarketplaceContent) {
+    auto global_lock = global_critical_region_.Acquire();
+    for (const auto& registered : registered_packages_) {
+      if (registered.data.title_id == title_id) {
+        result.push_back(registered.data);
+        result.back().device_id = device_id;
+      }
+    }
+  }
+
   auto package_root = ResolvePackageRoot(xuid, content_type, title_id);
   auto file_infos = rex::filesystem::ListFiles(package_root);
   for (const auto& file_info : file_infos) {
     if (file_info.type != rex::filesystem::FileInfo::Type::kDirectory) {
       // Directories only.
       continue;
+    }
+    if (xuid == 0 && content_type == XContentType::kMarketplaceContent) {
+      XCONTENT_AGGREGATE_DATA probe{};
+      probe.content_type = content_type;
+      probe.title_id = title_id;
+      probe.set_file_name(rex::path_to_utf8(file_info.name));
+      if (FindRegisteredPackage(probe)) {
+        continue;
+      }
     }
 
     XCONTENT_AGGREGATE_DATA content_data{};
@@ -180,6 +216,9 @@ std::unique_ptr<ContentPackage> ContentManager::ResolvePackage(
     return nullptr;
   }
   auto package = std::make_unique<ContentPackage>(kernel_state_, root_name, data, package_path);
+  if (!package->is_mounted()) {
+    return nullptr;
+  }
   return package;
 }
 
@@ -272,7 +311,9 @@ X_RESULT ContentManager::CreateContent(const std::string_view root_name, uint64_
     return X_ERROR_ACCESS_DENIED;
   }
   auto package = ResolvePackage(root_name, xuid, data);
-  assert_not_null(package);
+  if (!package) {
+    return X_ERROR_FUNCTION_FAILED;
+  }
 
   {
     auto global_lock = global_critical_region_.Acquire();
@@ -300,8 +341,12 @@ X_RESULT ContentManager::OpenContent(const std::string_view root_name, uint64_t 
   }
   auto package = ResolvePackage(root_name, xuid, data);
   assert_not_null(package);
-  package->LoadPackageLicenseMask(ResolvePackageHeaderPath(
-      data.file_name(), xuid, kernel_state_->title_id(), data.content_type));
+  if (const auto registered = FindRegisteredPackage(data)) {
+    package->SetPackageLicense(registered->license_mask);
+  } else {
+    package->LoadPackageLicenseMask(ResolvePackageHeaderPath(
+        data.file_name(), xuid, kernel_state_->title_id(), data.content_type));
+  }
   content_license = package->GetPackageLicense();
 
   {
@@ -351,6 +396,10 @@ X_RESULT ContentManager::GetContentThumbnail(uint64_t xuid, const XCONTENT_AGGRE
 X_RESULT ContentManager::SetContentThumbnail(uint64_t xuid, const XCONTENT_AGGREGATE_DATA& data,
                                              std::vector<uint8_t> buffer) {
   auto global_lock = global_critical_region_.Acquire();
+  if (FindRegisteredPackage(data)) {
+    // The package is a read-only file, not a folder to put a thumbnail in.
+    return X_ERROR_ACCESS_DENIED;
+  }
   auto package_path = ResolvePackagePath(xuid, data);
   std::filesystem::create_directories(package_path);
   if (std::filesystem::exists(package_path)) {
@@ -366,6 +415,10 @@ X_RESULT ContentManager::SetContentThumbnail(uint64_t xuid, const XCONTENT_AGGRE
 
 X_RESULT ContentManager::DeleteContent(uint64_t xuid, const XCONTENT_AGGREGATE_DATA& data) {
   auto global_lock = global_critical_region_.Acquire();
+  if (FindRegisteredPackage(data)) {
+    // Registered packages are read-only originals owned by the user.
+    return X_ERROR_ACCESS_DENIED;
+  }
 
   if (IsContentOpen(data)) {
     // TODO(Gliniak): Get real error code for this case.
@@ -420,6 +473,10 @@ X_RESULT ContentManager::UnmountAndDeleteContent(uint64_t xuid,
   delete package;
 
   // Delete phase: remove package directory and .header file
+  if (FindRegisteredPackage(data)) {
+    // Registered packages are read-only originals owned by the user.
+    return X_ERROR_ACCESS_DENIED;
+  }
   auto package_path = ResolvePackagePath(xuid, data);
 
   uint64_t used_xuid = (data.xuid != uint64_t(-1) && data.xuid != 0) ? uint64_t(data.xuid) : xuid;
@@ -643,6 +700,62 @@ X_RESULT ContentManager::InstallContent(const std::filesystem::path& package_pat
 
   // Write .header file
   return WriteContentHeaderFile(0, content_data, license_mask);
+}
+
+X_RESULT ContentManager::RegisterPackage(const std::filesystem::path& package_path) {
+  auto header = rex::filesystem::StfsContainerDevice::ReadPackageHeader(package_path);
+  if (!header) {
+    return X_ERROR_FILE_NOT_FOUND;
+  }
+  if (header->metadata.content_type != XContentType::kMarketplaceContent) {
+    return X_ERROR_INVALID_PARAMETER;
+  }
+
+  RegisteredPackage registered{};
+  registered.path = package_path;
+  // Titles find their marketplace content under their own title ID, whatever
+  // the package header names.
+  registered.data.device_id = static_cast<uint32_t>(DummyDeviceId::HDD);
+  registered.data.content_type = XContentType::kMarketplaceContent;
+  registered.data.title_id = kernel_state_->title_id();
+  registered.data.xuid = 0;
+  registered.data.set_file_name(rex::path_to_utf8(package_path.filename()));
+  auto display_name = header->metadata.display_name(rex::system::XLanguage::kEnglish);
+  registered.data.set_display_name(display_name.empty()
+                                       ? rex::path_to_utf16(package_path.filename())
+                                       : display_name);
+  for (const auto& license : header->header.licenses) {
+    if (license.license_flags) {
+      registered.license_mask |= license.license_bits;
+    }
+  }
+
+  auto global_lock = global_critical_region_.Acquire();
+  if (FindRegisteredPackage(registered.data)) {
+    return X_ERROR_ALREADY_EXISTS;
+  }
+  registered_packages_.push_back(std::move(registered));
+  return X_ERROR_SUCCESS;
+}
+
+std::optional<ContentManager::RegisteredPackage> ContentManager::FindRegisteredPackage(
+    const XCONTENT_AGGREGATE_DATA& data) const {
+  if (data.content_type != XContentType::kMarketplaceContent) {
+    return std::nullopt;
+  }
+  uint32_t title_id = data.title_id;
+  if (title_id == kCurrentlyRunningTitleId) {
+    title_id = kernel_state_->title_id();
+  }
+  const auto file_name = data.file_name();
+  auto global_lock = rex::thread::global_critical_region::AcquireDirect();
+  for (const auto& registered : registered_packages_) {
+    if (registered.data.title_id == title_id &&
+        rex::string::compare_case(registered.data.file_name().c_str(), file_name.c_str()) == 0) {
+      return registered;
+    }
+  }
+  return std::nullopt;
 }
 
 }  // namespace xam

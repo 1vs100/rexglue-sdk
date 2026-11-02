@@ -21,6 +21,13 @@ bool IsDebuggerAttached() {
 }
 
 void Break() {
+#if REX_PLATFORM_WINRT
+  // A UWP app cannot install a handler for the trap, so it would end the
+  // process with no log.
+  if (!IsDebuggerPresent()) {
+    return;
+  }
+#endif
   __debugbreak();
 }
 
