@@ -750,11 +750,26 @@ std::optional<ContentManager::RegisteredPackage> ContentManager::FindRegisteredP
   const auto file_name = data.file_name();
   auto global_lock = rex::thread::global_critical_region::AcquireDirect();
   for (const auto& registered : registered_packages_) {
-    if (registered.data.title_id == title_id &&
-        rex::string::compare_case(registered.data.file_name().c_str(), file_name.c_str()) == 0) {
+    if (registered.data.title_id != title_id) continue;
+    // Exact match first.
+    if (rex::string::compare_case(registered.data.file_name().c_str(), file_name.c_str()) == 0) {
+      return registered;
+    }
+    // Fall back to a short-suffix match: some titles (1 vs 100) query
+    // version-suffixed content names ("<hash>58") while the on-disk files
+    // carry the bare hash. The 40-hex hash prefix is unique in practice, so
+    // a common prefix covering all but at most 2 trailing chars still
+    // identifies the package unambiguously.
+    const auto registered_name = registered.data.file_name();
+    const size_t short_len = std::min(registered_name.size(), file_name.size());
+    const size_t long_len = std::max(registered_name.size(), file_name.size());
+    if (long_len - short_len <= 2 && short_len > 0 &&
+        rex::string::compare_case_n(registered_name.c_str(), file_name.c_str(), short_len) == 0) {
+      REXKRNL_INFO("content: matched '{}' for query '{}'", registered_name, file_name);
       return registered;
     }
   }
+  return std::nullopt;
   return std::nullopt;
 }
 
