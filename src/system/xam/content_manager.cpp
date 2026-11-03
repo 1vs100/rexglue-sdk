@@ -182,11 +182,26 @@ std::vector<XCONTENT_AGGREGATE_DATA> ContentManager::ListContent(uint32_t device
       continue;
     }
     if (xuid == 0 && content_type == XContentType::kMarketplaceContent) {
-      XCONTENT_AGGREGATE_DATA probe{};
-      probe.content_type = content_type;
-      probe.title_id = title_id;
-      probe.set_file_name(rex::path_to_utf8(file_info.name));
-      if (FindRegisteredPackage(probe)) {
+      // Exact-name dedupe only. FindRegisteredPackage also matches
+      // version-suffixed queries (1 vs 100 "<hash>58" vs on-disk "<hash>"),
+      // and those HDD entries must stay visible or the title resolves
+      // device ID -1 and reports content outdated (G014).
+      uint32_t resolved_title = title_id;
+      if (resolved_title == kCurrentlyRunningTitleId) {
+        resolved_title = kernel_state_->title_id();
+      }
+      const auto dir_name = rex::path_to_utf8(file_info.name);
+      auto global_lock = global_critical_region_.Acquire();
+      bool exact_dup = false;
+      for (const auto& registered : registered_packages_) {
+        if (registered.data.title_id != resolved_title) continue;
+        if (rex::string::compare_case(registered.data.file_name().c_str(), dir_name.c_str()) ==
+            0) {
+          exact_dup = true;
+          break;
+        }
+      }
+      if (exact_dup) {
         continue;
       }
     }
