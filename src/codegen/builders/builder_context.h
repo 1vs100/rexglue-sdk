@@ -231,6 +231,10 @@ struct BuilderContext {
    */
   void emit_function_call(uint32_t address);
 
+  /// Emits the body of a __savegprlr_N / __restgprlr_N helper in place.
+  /// False for any other name.
+  bool emit_save_restore_inline(const std::string& name);
+
   /**
    * @brief Emit C++ code for a conditional branch.
    * @param not_ If true, invert the condition

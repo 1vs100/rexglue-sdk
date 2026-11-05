@@ -101,6 +101,8 @@ void ApplyToml(const toml::table& toml, RecompilerConfig& cfg, const std::string
   // Bool scalars
   auto hasBool = [&](const char* key) -> bool { return toml[key].is_boolean(); };
   MergeBool(cfg.skipLr, toml["skip_lr"].value_or(false), hasBool("skip_lr"), "skip_lr");
+  MergeBool(cfg.inlineSaveRestoreHelpers, toml["inline_save_restore"].value_or(false),
+            hasBool("inline_save_restore"), "inline_save_restore");
   MergeBool(cfg.skipMsr, toml["skip_msr"].value_or(false), hasBool("skip_msr"), "skip_msr");
   MergeBool(cfg.ctrAsLocalVariable, toml["ctr_as_local"].value_or(false), hasBool("ctr_as_local"),
             "ctr_as_local");

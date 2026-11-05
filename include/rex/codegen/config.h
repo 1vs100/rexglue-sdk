@@ -96,6 +96,7 @@ struct RecompilerConfig {
   bool crRegistersAsLocalVariables = false;
   bool nonArgumentRegistersAsLocalVariables = false;
   bool nonVolatileRegistersAsLocalVariables = false;
+  bool inlineSaveRestoreHelpers = false;  ///< Emit __savegprlr_N/__restgprlr_N bodies at call sites
   bool generateExceptionHandlers = false;  ///< Generate SEH exception handler wrappers
 
   // === Analysis tuning (optional) ===

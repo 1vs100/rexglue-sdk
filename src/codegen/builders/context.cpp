@@ -12,6 +12,7 @@
 #include "builder_context.h"
 #include "helpers.h"
 
+#include <cstdlib>
 #include <algorithm>
 
 #include <rex/codegen/binary_view.h>
@@ -172,6 +173,30 @@ const CallTarget* BuilderContext::findCallTarget(uint32_t site) const {
   return nullptr;
 }
 
+// __savegprlr_N stores rN..r31 and r12 (the caller's lr) below r1;
+// __restgprlr_N loads them back and moves r12 to lr.
+bool BuilderContext::emit_save_restore_inline(const std::string& name) {
+  constexpr std::string_view kSave = "__savegprlr_", kRestore = "__restgprlr_";
+  const bool save = name.rfind(kSave, 0) == 0;
+  if (!save && name.rfind(kRestore, 0) != 0) return false;
+  const int first = std::atoi(name.c_str() + kSave.size());
+  if (first < 14 || first > 31) return false;
+  for (int i = first; i < 32; ++i) {
+    const int offset = -8 * (33 - i);
+    if (save)
+      println("\tREX_STACK_STORE_U64({}.u32 + {}, {}.u64);", r(1), offset, r(i));
+    else
+      println("\t{}.u64 = REX_STACK_LOAD_U64({}.u32 + {});", r(i), r(1), offset);
+  }
+  if (save) {
+    println("\tREX_STACK_STORE_U32({}.u32 + -8, {}.u32);", r(1), r(12));
+  } else {
+    println("\t{}.u64 = REX_STACK_LOAD_U32({}.u32 + -8);", r(12), r(1));
+    if (!config().skipLr) println("\tctx.lr = {}.u64;", r(12));
+  }
+  return true;
+}
+
 void BuilderContext::emit_function_call(uint32_t address) {
   const auto& cfg = config();
 
@@ -225,6 +250,8 @@ void BuilderContext::emit_function_call(uint32_t address) {
         }
         return;
       }
+
+      if (cfg.inlineSaveRestoreHelpers && emit_save_restore_inline(name)) return;
 
       emitCtx.reference(name);
       println("\t{}(ctx, base);", name);
