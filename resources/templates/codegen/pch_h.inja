@@ -355,3 +355,22 @@ inline std::atomic<i32>& ppc_global_lock_count_() {
     assert(old_count_ >= 1 && "LeaveGlobalLock called without matching EnterGlobalLock"); \
     rex::thread::global_critical_region::mutex().unlock();                                \
   } while (0)
+
+// A window around one reservation pair. stwcx. is a host compare-exchange, so
+// the global lock is only taken when the runtime asks for it.
+inline bool& ppc_atomic_window_lock_() {
+  static bool lock = false;
+  return lock;
+}
+
+#define REX_ATOMIC_WINDOW_MSR() (ppc_atomic_window_lock_() ? REX_CHECK_GLOBAL_LOCK() : u64(0x8000))
+
+#define REX_ENTER_ATOMIC_WINDOW()                      \
+  do {                                                 \
+    if (ppc_atomic_window_lock_()) REX_ENTER_GLOBAL_LOCK(); \
+  } while (0)
+
+#define REX_LEAVE_ATOMIC_WINDOW()                      \
+  do {                                                 \
+    if (ppc_atomic_window_lock_()) REX_LEAVE_GLOBAL_LOCK(); \
+  } while (0)

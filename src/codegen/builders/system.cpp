@@ -14,6 +14,91 @@
 
 namespace rex::codegen {
 
+namespace {
+
+// The XDK brackets lwarx..stwcx. with "mtmsrd r13,1" and "mtmsrd rS,1" to keep
+// interrupts off the reservation. stwcx. is a host compare-exchange, so a
+// straight window of register arithmetic around one reservation pair needs no
+// global lock. Such windows emit REX_*_ATOMIC_WINDOW, which the runtime can
+// still route to the global lock.
+constexpr size_t kMaxAtomicWindow = 16;
+
+uint32_t Word(const uint32_t* p) { return __builtin_bswap32(*p); }
+uint32_t Primary(uint32_t w) { return w >> 26; }
+uint32_t Extended(uint32_t w) { return (w >> 1) & 0x3FF; }
+uint32_t Rs(uint32_t w) { return (w >> 21) & 0x1F; }
+bool IsMtmsrd(uint32_t w) { return Primary(w) == 31 && Extended(w) == 178; }
+bool IsMfmsr(uint32_t w) { return Primary(w) == 31 && Extended(w) == 83; }
+
+enum class WindowOp { kOther, kArith, kReserve, kStoreConditional };
+
+WindowOp Classify(uint32_t w) {
+  switch (Primary(w)) {
+    case 10: case 11: case 14: case 15: case 20: case 21: case 23:
+    case 24: case 25: case 26: case 27: case 28: case 29:
+      return WindowOp::kArith;
+    case 31:
+      switch (Extended(w)) {
+        case 20: case 84:
+          return WindowOp::kReserve;
+        case 150: case 214:
+          return (w & 1) ? WindowOp::kStoreConditional : WindowOp::kOther;
+        case 0: case 8: case 24: case 26: case 27: case 28: case 32: case 40: case 60:
+        case 104: case 124: case 136: case 138: case 202: case 233: case 234: case 235:
+        case 266: case 316: case 412: case 444: case 536: case 539: case 792: case 824:
+        case 922: case 954: case 986:
+          return WindowOp::kArith;
+      }
+  }
+  return WindowOp::kOther;
+}
+
+// Length in words from the opening mtmsrd r13 to its closing mtmsrd, or 0
+// when the window is not a plain reservation pair. A branch into the window
+// could arrive holding the global lock, so the closing mtmsrd must release it.
+size_t AtomicWindowLength(const FunctionNode& fn, const uint32_t* open, uint32_t open_address) {
+  if (!IsMtmsrd(Word(open)) || Rs(Word(open)) != 13) return 0;
+  bool reserved = false, stored = false;
+  for (size_t i = 1; i <= kMaxAtomicWindow && open_address + 4 * i < fn.end(); ++i) {
+    if (fn.isLabel(open_address + 4 * uint32_t(i))) return 0;
+    const uint32_t w = Word(open + i);
+    if (IsMtmsrd(w)) return (Rs(w) != 13 && reserved && stored) ? i : 0;
+    switch (Classify(w)) {
+      case WindowOp::kArith:
+        break;
+      case WindowOp::kReserve:
+        if (reserved) return 0;
+        reserved = true;
+        break;
+      case WindowOp::kStoreConditional:
+        if (!reserved || stored) return 0;
+        stored = true;
+        break;
+      case WindowOp::kOther:
+        return 0;
+    }
+  }
+  return 0;
+}
+
+bool OpensAtomicWindow(const BuilderContext& ctx) {
+  return AtomicWindowLength(ctx.fn, ctx.data, ctx.base) != 0;
+}
+
+bool ClosesAtomicWindow(const BuilderContext& ctx) {
+  for (size_t back = 1; back <= kMaxAtomicWindow && ctx.base - 4 * back >= ctx.fn.base(); ++back) {
+    if (AtomicWindowLength(ctx.fn, ctx.data - back, ctx.base - 4 * uint32_t(back)) == back) return true;
+  }
+  return false;
+}
+
+bool ReadsMsrForAtomicWindow(const BuilderContext& ctx) {
+  return ctx.base + 4 < ctx.fn.end() && IsMfmsr(Word(ctx.data)) &&
+         AtomicWindowLength(ctx.fn, ctx.data + 1, ctx.base + 4) != 0;
+}
+
+}  // namespace
+
 //=============================================================================
 // No-ops and Sync Operations
 //=============================================================================
@@ -263,7 +348,8 @@ bool build_mfmsr(BuilderContext& ctx) {
   if (!ctx.config().skipMsr) {
     // Check global lock and return appropriate value
     // Returns 0x8000 if unlocked (interrupts enabled), 0 if locked
-    ctx.println("\t{}.u64 = REX_CHECK_GLOBAL_LOCK();", ctx.r(ctx.insn.operands[0]));
+    ctx.println("\t{}.u64 = {};", ctx.r(ctx.insn.operands[0]),
+                ReadsMsrForAtomicWindow(ctx) ? "REX_ATOMIC_WINDOW_MSR()" : "REX_CHECK_GLOBAL_LOCK()");
   }
   return true;
 }
@@ -335,9 +421,9 @@ bool build_mtmsrd(BuilderContext& ctx) {
     // Other = leave lock (enable interrupts)
     uint32_t src_reg = ctx.insn.operands[0];
     if (src_reg == 13) {
-      ctx.println("\tREX_ENTER_GLOBAL_LOCK();");
+      ctx.println("\t{}();", OpensAtomicWindow(ctx) ? "REX_ENTER_ATOMIC_WINDOW" : "REX_ENTER_GLOBAL_LOCK");
     } else {
-      ctx.println("\tREX_LEAVE_GLOBAL_LOCK();");
+      ctx.println("\t{}();", ClosesAtomicWindow(ctx) ? "REX_LEAVE_ATOMIC_WINDOW" : "REX_LEAVE_GLOBAL_LOCK");
     }
   }
   return true;
