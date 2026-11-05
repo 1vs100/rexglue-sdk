@@ -56,6 +56,8 @@ function(rexglue_apply_target_settings target_name)
     endif()
 
     if(NOT MSVC)
+        # Generated code reads and writes guest memory through differently typed pointers.
+        target_compile_options(${target_name} PRIVATE -fno-strict-aliasing)
         if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
             target_compile_options(${target_name} PRIVATE -msse4.1)
         endif()
