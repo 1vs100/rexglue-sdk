@@ -177,12 +177,18 @@ struct FPSCRRegister {
     setcsr(csr);
   }
 
+  // Set before guest threads start: scalar code then keeps the vector unit's denormal flushing instead of
+  // writing the host control register on every switch between the two.
+  static inline bool keepFlushMode = false;
+
   inline void enableFlushModeUnconditional() noexcept {
+    if (keepFlushMode && (csr & FlushMask) == FlushMask) return;
     csr |= FlushMask;
     setcsr(csr);
   }
 
   inline void disableFlushModeUnconditional() noexcept {
+    if (keepFlushMode) return;
     csr &= ~FlushMask;
     setcsr(csr);
   }
@@ -195,6 +201,7 @@ struct FPSCRRegister {
   }
 
   inline void disableFlushMode() noexcept {
+    if (keepFlushMode) return;
     if ((csr & FlushMask) != 0) [[unlikely]] {
       csr &= ~FlushMask;
       setcsr(csr);
