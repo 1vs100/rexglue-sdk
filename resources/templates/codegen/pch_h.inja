@@ -121,6 +121,19 @@ extern PPCFuncMapping PPCFuncMappings[];
 #endif
 
 //=============================================================================
+// Fused Multiply-Add
+//=============================================================================
+
+// PPC fmadd rounds once. With FMA in the target ISA std::fma is one instruction; without it (the Xbox One's Jaguar)
+// std::fma is a software routine in the C runtime, so the product and the sum round separately instead. The last
+// bit can then differ from the hardware; the title's results matched in testing.
+#if defined(__FMA__) || defined(__ARM_FEATURE_FMA)
+#define REX_FMA(a, b, c) std::fma((a), (b), (c))
+#else
+#define REX_FMA(a, b, c) ((a) * (b) + (c))
+#endif
+
+//=============================================================================
 // Memory Access
 //=============================================================================
 
