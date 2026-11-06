@@ -255,10 +255,16 @@ endif()
 add_subdirectory(thirdparty)
 
 # Enable warnings after thirdparty
-add_compile_options(
-    -Wall
-    -Wextra
-)
+if(MSVC)
+    # -Wall means /Wall (every warning, including off-by-default groups)
+    # under clang-cl. Level 4 keeps the useful ones without the flood.
+    add_compile_options(/W4)
+else()
+    add_compile_options(
+        -Wall
+        -Wextra
+    )
+endif()
 
 include_directories(${REXGLUE_ROOT}/include)
 
