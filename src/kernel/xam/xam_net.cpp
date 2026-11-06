@@ -842,8 +842,9 @@ i32 NetDll_select_entry(i32 caller, i32 nfds, ppc_ptr_t<x_fd_set> readfds,
   // The guest's nfds counts guest handles; the host needs its own descriptors.
   const int native_nfds = std::max(
       {host_readfds.NativeLimit(), host_writefds.NativeLimit(), host_exceptfds.NativeLimit()});
-  int ret = select(native_nfds, readfds ? &native_readfds : nullptr, writefds ? &native_writefds : nullptr,
-                   exceptfds ? &native_exceptfds : nullptr, timeout_in);
+  int ret = select(native_nfds, readfds ? &native_readfds : nullptr,
+                   writefds ? &native_writefds : nullptr, exceptfds ? &native_exceptfds : nullptr,
+                   timeout_in);
   if (readfds) {
     host_readfds.UpdateFrom(&native_readfds);
     host_readfds.Store(readfds);

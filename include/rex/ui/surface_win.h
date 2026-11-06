@@ -29,7 +29,8 @@
 namespace rex {
 namespace ui {
 
-#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP | WINAPI_PARTITION_GAMES) && !REX_PLATFORM_WINRT
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP | WINAPI_PARTITION_GAMES) && \
+    !REX_PLATFORM_WINRT
 class Win32HwndSurface final : public Surface {
  public:
   explicit Win32HwndSurface(HINSTANCE hinstance, HWND hwnd) : hinstance_(hinstance), hwnd_(hwnd) {}

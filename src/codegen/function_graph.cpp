@@ -345,21 +345,27 @@ void emit_print(std::string& out, fmt::format_string<Args...> fmt, Args&&... arg
   fmt::vformat_to(std::back_inserter(out), fmt.get(), fmt::make_format_args(args...));
 }
 
-// Guest stacks sit below the 0xE0000000 physical heap, so an access at r1 plus a displacement uses the
-// REX_STACK_ macros, which skip the host offset check.
+// Guest stacks sit below the 0xE0000000 physical heap, so an access at r1 plus a displacement uses
+// the REX_STACK_ macros, which skip the host offset check.
 void use_stack_access(std::string& out, size_t from) {
   for (const std::string_view kind : {"REX_LOAD_U", "REX_STORE_U"}) {
     for (size_t at = out.find(kind, from); at != std::string::npos; at = out.find(kind, at + 1)) {
       size_t arg = out.find('(', at);
-      if (arg == std::string::npos) break;
+      if (arg == std::string::npos)
+        break;
       std::string_view rest = std::string_view(out).substr(arg + 1);
-      if (rest.starts_with("ctx.")) rest.remove_prefix(4);
-      if (!rest.starts_with("r1.u32 + ")) continue;
+      if (rest.starts_with("ctx."))
+        rest.remove_prefix(4);
+      if (!rest.starts_with("r1.u32 + "))
+        continue;
       rest.remove_prefix(9);
-      if (rest.starts_with('-')) rest.remove_prefix(1);
+      if (rest.starts_with('-'))
+        rest.remove_prefix(1);
       size_t digits = 0;
-      while (digits < rest.size() && rest[digits] >= '0' && rest[digits] <= '9') ++digits;
-      if (digits == 0 || digits == rest.size() || (rest[digits] != ')' && rest[digits] != ',')) continue;
+      while (digits < rest.size() && rest[digits] >= '0' && rest[digits] <= '9')
+        ++digits;
+      if (digits == 0 || digits == rest.size() || (rest[digits] != ')' && rest[digits] != ','))
+        continue;
       out.insert(at + 4, "STACK_");
     }
   }

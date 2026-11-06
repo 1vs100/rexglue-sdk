@@ -68,7 +68,8 @@ X_STATUS StfsContainerFile::ReadSync(std::span<uint8_t> buffer, size_t byte_offs
     size_t read_offset = (byte_offset > src_offset) ? byte_offset - src_offset : 0;
     size_t read_length = std::min(record.length - read_offset, remaining_length);
 
-    // The container's FILE is shared by every entry and thread; the seek and the read must not interleave.
+    // The container's FILE is shared by every entry and thread; the seek and the read must not
+    // interleave.
     auto& file = entry_->files()->at(record.file);
     LockFile(file);
     rex::filesystem::Seek(file, record.offset + read_offset, SEEK_SET);

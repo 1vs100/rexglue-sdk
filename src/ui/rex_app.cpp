@@ -50,8 +50,7 @@
 #include <filesystem>
 #include <string_view>
 
-REXCVAR_DEFINE_STRING(audio_backend, "sdl", "Audio",
-                      "Audio output backend (sdl, nop)");
+REXCVAR_DEFINE_STRING(audio_backend, "sdl", "Audio", "Audio output backend (sdl, nop)");
 REXCVAR_DEFINE_STRING(gpu_plugin, "", "GPU",
                       "GPU emulation plugin to load at startup (e.g. 'xenos'); empty disables "
                       "GPU emulation")

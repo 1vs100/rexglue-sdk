@@ -106,10 +106,12 @@ X_STATUS XSocket::IOControl(uint32_t cmd, uint8_t* arg_ptr) {
   int ret;
   switch (cmd) {
     case X_FIONBIO:
-      ret = rex::net::socket_ioctl(native_handle_, FIONBIO, reinterpret_cast<uint8_t*>(&native_arg));
+      ret =
+          rex::net::socket_ioctl(native_handle_, FIONBIO, reinterpret_cast<uint8_t*>(&native_arg));
       break;
     case X_FIONREAD:
-      ret = rex::net::socket_ioctl(native_handle_, FIONREAD, reinterpret_cast<uint8_t*>(&native_arg));
+      ret =
+          rex::net::socket_ioctl(native_handle_, FIONREAD, reinterpret_cast<uint8_t*>(&native_arg));
       if (ret >= 0) {
         *guest_arg = native_arg;
       }

@@ -419,7 +419,8 @@ D3D12Presenter::ConnectOrReconnectPaintingToSurfaceFromUIThread(Surface& new_sur
     ID3D12CommandQueue* direct_queue = provider_.GetDirectQueue();
     Microsoft::WRL::ComPtr<IDXGISwapChain1> swap_chain_1;
     switch (surface_type) {
-#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP | WINAPI_PARTITION_GAMES) && !REX_PLATFORM_WINRT
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP | WINAPI_PARTITION_GAMES) && \
+    !REX_PLATFORM_WINRT
       case Surface::kTypeIndex_Win32Hwnd: {
         HWND surface_hwnd = static_cast<const Win32HwndSurface&>(new_surface).hwnd();
         if (FAILED(dxgi_factory->CreateSwapChainForHwnd(

@@ -212,7 +212,8 @@ void SDLInputDriver::OnWindowAvailable(rex::ui::Window* window) {
           this);
 
 #if REX_PLATFORM_WINRT
-      // XInput is absent in AppContainer; WGI is the only gamepad backend and SDL 3.4 disables it by default.
+      // XInput is absent in AppContainer; WGI is the only gamepad backend and SDL 3.4 disables it
+      // by default.
       SDL_SetHint(SDL_HINT_JOYSTICK_WGI, "1");
 #endif
       if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD)) {

@@ -194,9 +194,9 @@ std::vector<XCONTENT_AGGREGATE_DATA> ContentManager::ListContent(uint32_t device
       auto global_lock = global_critical_region_.Acquire();
       bool exact_dup = false;
       for (const auto& registered : registered_packages_) {
-        if (registered.data.title_id != resolved_title) continue;
-        if (rex::string::compare_case(registered.data.file_name().c_str(), dir_name.c_str()) ==
-            0) {
+        if (registered.data.title_id != resolved_title)
+          continue;
+        if (rex::string::compare_case(registered.data.file_name().c_str(), dir_name.c_str()) == 0) {
           exact_dup = true;
           break;
         }
@@ -736,9 +736,8 @@ X_RESULT ContentManager::RegisterPackage(const std::filesystem::path& package_pa
   registered.data.xuid = 0;
   registered.data.set_file_name(rex::path_to_utf8(package_path.filename()));
   auto display_name = header->metadata.display_name(rex::system::XLanguage::kEnglish);
-  registered.data.set_display_name(display_name.empty()
-                                       ? rex::path_to_utf16(package_path.filename())
-                                       : display_name);
+  registered.data.set_display_name(
+      display_name.empty() ? rex::path_to_utf16(package_path.filename()) : display_name);
   for (const auto& license : header->header.licenses) {
     if (license.license_flags) {
       registered.license_mask |= license.license_bits;
@@ -765,7 +764,8 @@ std::optional<ContentManager::RegisteredPackage> ContentManager::FindRegisteredP
   const auto file_name = data.file_name();
   auto global_lock = rex::thread::global_critical_region::AcquireDirect();
   for (const auto& registered : registered_packages_) {
-    if (registered.data.title_id != title_id) continue;
+    if (registered.data.title_id != title_id)
+      continue;
     // Exact match first.
     if (rex::string::compare_case(registered.data.file_name().c_str(), file_name.c_str()) == 0) {
       return registered;

@@ -22,7 +22,8 @@
 namespace rex {
 namespace ui {
 
-#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP | WINAPI_PARTITION_GAMES) && !REX_PLATFORM_WINRT
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP | WINAPI_PARTITION_GAMES) && \
+    !REX_PLATFORM_WINRT
 bool Win32HwndSurface::GetSizeImpl(uint32_t& width_out, uint32_t& height_out) const {
   RECT client_rect;
   if (!GetClientRect(hwnd(), &client_rect)) {

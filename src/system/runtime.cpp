@@ -56,8 +56,9 @@ Runtime::Runtime(const std::filesystem::path& game_data_root,
       metadata_root_(metadata_root) {
   if (user_data_root_.empty()) {
     // A package game root is a read-only file; keep user data beside it.
-    user_data_root_ = std::filesystem::is_regular_file(game_data_root) ? game_data_root.parent_path()
-                                                                       : game_data_root;
+    user_data_root_ = std::filesystem::is_regular_file(game_data_root)
+                          ? game_data_root.parent_path()
+                          : game_data_root;
   }
 }
 
