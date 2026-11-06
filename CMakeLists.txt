@@ -137,13 +137,16 @@ endif()
 # Global compile options
 add_compile_options(
     -fno-strict-aliasing
-    -ffp-model=strict
     $<$<CONFIG:DEBUG>:-g>
-    $<$<CONFIG:DEBUG>:-O0>
-    $<$<CONFIG:RELEASE>:-O3>
     $<$<CONFIG:RELEASE>:-DNDEBUG>
-    -fno-char8_t
 )
+# clang-cl ignores the GNU spellings. Strict FP matters because generated
+# code changes the rounding and denormal mode at run time.
+if(MSVC)
+    add_compile_options(/fp:strict $<$<COMPILE_LANGUAGE:CXX>:/Zc:char8_t-> $<$<CONFIG:RELEASE>:/clang:-O3>)
+else()
+    add_compile_options(-ffp-model=strict -fno-char8_t $<$<CONFIG:DEBUG>:-O0> $<$<CONFIG:RELEASE>:-O3>)
+endif()
 
 if(NOT MSVC AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
     add_compile_options(-msse4.1)
