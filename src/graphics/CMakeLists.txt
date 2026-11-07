@@ -64,6 +64,7 @@ if(REXGLUE_USE_D3D12)
     # DXBC shader translation (required for D3D12)
     set(REXGPU_XENOS_DXBC_SOURCES
         pipeline/shader/dxbc.cpp
+        pipeline/shader/dxbc_geometry_shader.cpp
         pipeline/shader/dxbc_translator.cpp
         pipeline/shader/dxbc_translator_alu.cpp
         pipeline/shader/dxbc_translator_fetch.cpp
