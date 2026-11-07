@@ -785,7 +785,6 @@ std::optional<ContentManager::RegisteredPackage> ContentManager::FindRegisteredP
     }
   }
   return std::nullopt;
-  return std::nullopt;
 }
 
 }  // namespace xam
