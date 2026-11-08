@@ -226,6 +226,35 @@ if(REXGLUE_USE_VULKAN)
 
         set(MVK_BUILD_SHADER_CONVERTER_TOOL OFF CACHE BOOL "" FORCE)
         set(MVK_EXCLUDE_SPIRV_TOOLS ON CACHE BOOL "" FORCE)
+
+        # MoltenVK downloads CPM.cmake at configure time without checking
+        # the result, and the release download endpoint is unreliable.
+        # Place the vendored copy where its recipe looks first.
+        set(_cpm_version 0.40.8)
+        file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/moltenvk/cmake/recipes/CPM.cmake" _mvk_cpm_version
+            REGEX "^set\\(CPM_DOWNLOAD_VERSION ")
+        if(NOT _mvk_cpm_version STREQUAL "set(CPM_DOWNLOAD_VERSION ${_cpm_version})")
+            message(FATAL_ERROR "MoltenVK requires '${_mvk_cpm_version}'. "
+                "Vendor that version as cmake/CPM_<version>.cmake.")
+        endif()
+        # Same default as moltenvk/cmake/MoltenVK/MoltenVK_CPM_Cache.cmake.
+        # The cache entry is forced to the resolved absolute path so the
+        # recipe reads the same location that is seeded here.
+        if(CPM_SOURCE_CACHE)
+            set(_cpm_cache "${CPM_SOURCE_CACHE}")
+        elseif(NOT "$ENV{CPM_SOURCE_CACHE}" STREQUAL "")
+            set(_cpm_cache "$ENV{CPM_SOURCE_CACHE}")
+        else()
+            set(_cpm_cache "~/.cache/CPM")
+        endif()
+        file(REAL_PATH "${_cpm_cache}" _cpm_cache
+            BASE_DIRECTORY "${CMAKE_BINARY_DIR}" EXPAND_TILDE)
+        set(CPM_SOURCE_CACHE "${_cpm_cache}"
+            CACHE PATH "Directory to download CPM dependencies" FORCE)
+        file(MAKE_DIRECTORY "${_cpm_cache}/cpm")
+        file(COPY_FILE "${PROJECT_SOURCE_DIR}/cmake/CPM_${_cpm_version}.cmake"
+            "${_cpm_cache}/cpm/CPM_${_cpm_version}.cmake" ONLY_IF_DIFFERENT)
+
         add_subdirectory(moltenvk)
     endif()
 endif()
