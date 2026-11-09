@@ -20,6 +20,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include <spdlog/pattern_formatter.h>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
@@ -275,7 +276,8 @@ void InitLogging(const LogConfig& config) {
       auto sink =
           std::make_shared<spdlog::sinks::basic_file_sink_mt>(resolved_path.string(), false);
       sink->set_level(spdlog::level::trace);
-      sink->set_pattern(config.file_pattern);
+      sink->set_formatter(
+          std::make_unique<spdlog::pattern_formatter>(config.file_pattern, config.file_time_type));
       g_file_sink = sink;
     } catch (const spdlog::spdlog_ex& e) {
       std::fprintf(stderr, "Log file %s unavailable: %s\n", resolved_path.string().c_str(),
@@ -517,8 +519,10 @@ void SetConsolePattern(const std::string& pattern) {
 }
 
 void SetFilePattern(const std::string& pattern) {
+  std::lock_guard lock(g_mutex);
   if (g_file_sink)
-    g_file_sink->set_pattern(pattern);
+    g_file_sink->set_formatter(
+        std::make_unique<spdlog::pattern_formatter>(pattern, g_config.file_time_type));
 }
 
 // ==========================================================================
