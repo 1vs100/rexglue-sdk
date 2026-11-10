@@ -170,6 +170,18 @@ std::vector<fs::path> CollectSdkRoots() {
 MacOSVulkanRuntimePaths DetectMacOSVulkanRuntimePaths() {
   MacOSVulkanRuntimePaths paths;
 
+  // An app bundle keeps the manifest in Contents/Resources, since codesign
+  // refuses the icd.d folder in Contents/MacOS. No library sits there to make
+  // it a root, and it must win over a Vulkan SDK on the system.
+  const fs::path executable_dir = rex::filesystem::GetExecutableFolder();
+  if (executable_dir.filename() == "MacOS") {
+    const fs::path bundle_icd =
+        executable_dir.parent_path() / "Resources" / "vulkan" / "icd.d" / "MoltenVK_icd.json";
+    if (PathExists(bundle_icd)) {
+      paths.moltenvk_icd = bundle_icd;
+    }
+  }
+
   for (const std::filesystem::path& root : CollectSdkRoots()) {
     if (paths.sdk_root.empty()) {
       paths.sdk_root = root;
